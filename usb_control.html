@@ -1,0 +1,138 @@
+<!doctype html>
+<!--
+  CanSat rover control over the USB cable (Web Serial).
+  Open this file in Chrome or Edge (Safari has no Web Serial), click Connect,
+  and pick the Pico. Close the Arduino IDE Serial Monitor first - only one
+  program can use the port at a time.
+-->
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>CanSat Rover (USB)</title>
+<style>
+  body{font-family:-apple-system,sans-serif;background:#111;color:#eee;text-align:center;margin:0;padding:16px;user-select:none}
+  h1{font-size:20px;margin:8px 0 4px}
+  #status{font-size:14px;color:#c66;margin-bottom:12px}
+  #connect{height:auto;padding:10px 20px;font-size:16px;background:#246;margin-bottom:16px}
+  .pad{display:grid;grid-template-columns:repeat(3,90px);grid-gap:8px;justify-content:center}
+  button{height:90px;font-size:28px;border:0;border-radius:12px;background:#333;color:#eee;touch-action:none}
+  button.on{background:#2a7}
+  #stop{background:#a33}
+  .row{margin:20px 0;font-size:16px}
+  input[type=range]{width:240px;vertical-align:middle}
+  .hint{color:#888;font-size:13px}
+</style></head><body>
+<h1>CanSat Rover (USB)</h1>
+<div id="status">not connected</div>
+<button id="connect">Connect USB</button>
+<div class="pad">
+  <span></span><button data-k="w">&#9650;</button><span></span>
+  <button data-k="a">&#9664;</button><button id="stop">&#9632;</button><button data-k="d">&#9654;</button>
+  <span></span><button data-k="s">&#9660;</button><span></span>
+</div>
+<div class="row">Speed <input id="speed" type="range" min="60" max="255" value="200"> <span id="sv">200</span></div>
+<div class="hint">Keys: W A S D or arrow keys. Space = stop.</div>
+<script>
+const held = {w:false,a:false,s:false,d:false};
+const keyMap = {w:'w',arrowup:'w',a:'a',arrowleft:'a',s:'s',arrowdown:'s',d:'d',arrowright:'d'};
+const speedEl = document.getElementById('speed'), sv = document.getElementById('sv');
+const statusEl = document.getElementById('status');
+const connectBtn = document.getElementById('connect');
+speedEl.oninput = () => sv.textContent = speedEl.value;
+
+function setStatus(text, ok){ statusEl.textContent = text; statusEl.style.color = ok ? '#8c8' : '#c66'; }
+
+function refreshButtons(){
+  document.querySelectorAll('button[data-k]').forEach(b => b.classList.toggle('on', held[b.dataset.k]));
+}
+
+// Turn held keys into left/right wheel speeds (-255..255)
+function wheelSpeeds(){
+  const v = +speedEl.value;
+  const t = (held.w ? 1 : 0) - (held.s ? 1 : 0);   // throttle
+  const r = (held.d ? 1 : 0) - (held.a ? 1 : 0);   // turn (+ = right)
+  let l, rt;
+  if (t === 0) { l = r; rt = -r; }                  // spin in place
+  else {                                            // curve: slow the inner wheel
+    l  = t * (r < 0 ? 0.3 : 1);
+    rt = t * (r > 0 ? 0.3 : 1);
+  }
+  return [Math.round(l * v), Math.round(rt * v)];
+}
+
+let port = null, writer = null, busy = false;
+const encoder = new TextEncoder();
+
+async function connect(){
+  if (!('serial' in navigator)) { setStatus('This browser has no Web Serial - use Chrome or Edge', false); return; }
+  try {
+    port = await navigator.serial.requestPort({filters: [{usbVendorId: 0x2E8A}]});  // Raspberry Pi
+    await port.open({baudRate: 115200});
+    writer = port.writable.getWriter();
+    connectBtn.style.display = 'none';
+    setStatus('connected', true);
+    readLoop();
+  } catch (e) {
+    port = writer = null;
+    setStatus('connect failed: ' + e.message + ' (is the Serial Monitor open?)', false);
+  }
+}
+
+// Read replies so we notice if the Pico stops answering or is unplugged
+async function readLoop(){
+  const decoder = new TextDecoderStream();
+  port.readable.pipeTo(decoder.writable).catch(() => {});
+  const reader = decoder.readable.getReader();
+  try {
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+    }
+  } catch (e) {}
+  disconnected();
+}
+
+function disconnected(){
+  writer = null; port = null;
+  connectBtn.style.display = '';
+  setStatus('disconnected', false);
+}
+
+async function send(){
+  if (!writer || busy) return;
+  busy = true;
+  const [l, r] = wheelSpeeds();
+  try {
+    await writer.write(encoder.encode(`${l},${r}\n`));
+    setStatus(`connected  L ${l}  R ${r}`, true);
+  } catch (e) {
+    disconnected();
+  }
+  busy = false;
+}
+// Keep sending so the rover's auto-stop doesn't trigger while driving
+setInterval(send, 100);
+
+function stopAll(){ for (const k in held) held[k] = false; refreshButtons(); send(); }
+
+connectBtn.addEventListener('click', connect);
+if ('serial' in navigator) navigator.serial.addEventListener('disconnect', disconnected);
+
+document.addEventListener('keydown', e => {
+  if (e.key === ' ') { stopAll(); e.preventDefault(); return; }
+  const k = keyMap[e.key.toLowerCase()];
+  if (k) { held[k] = true; refreshButtons(); e.preventDefault(); }
+});
+document.addEventListener('keyup', e => {
+  const k = keyMap[e.key.toLowerCase()];
+  if (k) { held[k] = false; refreshButtons(); }
+});
+window.addEventListener('blur', stopAll);
+
+document.querySelectorAll('button[data-k]').forEach(b => {
+  const k = b.dataset.k;
+  b.addEventListener('pointerdown', e => { held[k] = true; refreshButtons(); b.setPointerCapture(e.pointerId); });
+  b.addEventListener('pointerup', () => { held[k] = false; refreshButtons(); });
+  b.addEventListener('pointercancel', () => { held[k] = false; refreshButtons(); });
+});
+document.getElementById('stop').addEventListener('pointerdown', stopAll);
+</script></body></html>
