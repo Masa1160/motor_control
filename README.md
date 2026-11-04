@@ -17,7 +17,7 @@ Raspberry Pi Pico 2 W で、2つのDCモーター（左右の車輪・2輪差動
 | 方法 | 状態 | 使い方 |
 |---|---|---|
 | **USB** | ✅ 動作確認済み | Chrome で `usb_control.html` を開き「Connect USB」を押す |
-| **Wi-Fi** | ⚠️ まだ接続できていない | Mac を `CanSat-Rover` に接続し、`http://192.168.42.1` を開く |
+| **Wi-Fi** | ✅ 動作確認済み | Mac を `CanSat-Rover` に接続し、`http://192.168.4.1` を開く |
 
 ### ファイル
 | ファイル | 内容 |
@@ -25,6 +25,7 @@ Raspberry Pi Pico 2 W で、2つのDCモーター（左右の車輪・2輪差動
 | `sketch_nov3a.ino` | Pico に書き込むプログラム（モーター制御・Wi-Fi・USB受信） |
 | `usb_control.html` | USB で操作するための画面（Chrome で開く） |
 | `README.md` | この説明書 |
+| `NOTES.md` | 作業メモ（起きた問題と解決、次にやること） |
 
 ### 配線（Pico 2 W → L9110S）
 | Pico 2 W | L9110S | 役割 |
@@ -48,7 +49,7 @@ Raspberry Pi Pico 2 W で、2つのDCモーター（左右の車輪・2輪差動
 
 ### 使い方：Wi-Fi
 1. Mac の Wi-Fi で **CanSat-Rover** に接続（パスワード：`cansat123`）
-2. ブラウザで **`http://192.168.42.1`** を開く（https ではなく **http**）
+2. ブラウザで **`http://192.168.4.1`** を開く（https ではなく **http**）
 3. 操作する
 
 ### 操作方法（USB・Wi-Fi 共通）
@@ -86,7 +87,7 @@ USB では1行ずつ `左,右` を送ります（それぞれ -255〜255）。
 - **左右が逆** → Motor A と Motor B の線を入れ替える
 - **モーターがうなるだけで回らない** → スピードを上げる
 - **USB で「connect failed」** → シリアルモニタを閉じる
-- **Wi-Fi でページが開かない** → Mac の IP アドレスが `192.168.42.x` か確認する（`172.31.x.x` なら別のネットワークに接続中、`169.254.x.x` なら Pico からアドレスがもらえていない）
+- **Wi-Fi でページが開かない** → Mac の IP アドレスが `192.168.4.x` か確認する（`172.31.x.x` なら別のネットワークに接続中、`169.254.x.x` なら Pico からアドレスがもらえていない）
 
 ---
 
@@ -99,7 +100,7 @@ There is no RC transmitter. The rover is **controlled from a Mac** in one of two
 | Method | Status | How |
 |---|---|---|
 | **USB** | ✅ Working | Open `usb_control.html` in Chrome and click "Connect USB" |
-| **Wi-Fi** | ⚠️ Not connecting yet | Join `CanSat-Rover` on the Mac and open `http://192.168.42.1` |
+| **Wi-Fi** | ✅ Working | Join `CanSat-Rover` on the Mac and open `http://192.168.4.1` |
 
 ### Files
 | File | What it is |
@@ -107,6 +108,7 @@ There is no RC transmitter. The rover is **controlled from a Mac** in one of two
 | `sketch_nov3a.ino` | The program uploaded to the Pico (motor control, Wi-Fi, USB commands) |
 | `usb_control.html` | Control page for driving over USB (open in Chrome) |
 | `README.md` | This file |
+| `NOTES.md` | Dev notes (problems hit, how they were fixed, next steps) |
 
 ### Wiring (Pico 2 W → L9110S)
 | Pico 2 W | L9110S | Purpose |
@@ -130,7 +132,7 @@ There is no RC transmitter. The rover is **controlled from a Mac** in one of two
 
 ### Driving over Wi-Fi
 1. On the Mac, join the Wi-Fi network **CanSat-Rover** (password: `cansat123`).
-2. Open **`http://192.168.42.1`** in a browser (**http**, not https).
+2. Open **`http://192.168.4.1`** in a browser (**http**, not https).
 3. Drive.
 
 ### Controls (same on both pages)
@@ -168,4 +170,4 @@ You can also type these into the Serial Monitor (115200 baud). The Pico replies 
 - **Left and right are swapped** → swap the Motor A and Motor B wires.
 - **Motor hums but doesn't turn** → raise the speed.
 - **"connect failed" on USB** → close the Serial Monitor.
-- **Wi-Fi page won't load** → check the Mac's IP address is `192.168.42.x` (`172.31.x.x` means you're on a different network; `169.254.x.x` means the Pico didn't give out an address).
+- **Wi-Fi page won't load** → check the Mac's IP address is `192.168.4.x` (`172.31.x.x` means you're on a different network; `169.254.x.x` means the Pico didn't give out an address).

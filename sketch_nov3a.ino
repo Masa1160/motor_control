@@ -1,7 +1,7 @@
 // CanSat rover: drive two DC motors (L9110S) over Wi-Fi from a browser.
 //
 // The Pico 2 W creates its own Wi-Fi network. Join it from the Mac, open
-// http://192.168.42.1 and drive with WASD / arrow keys or the on-screen buttons.
+// http://192.168.4.1 and drive with WASD / arrow keys or the on-screen buttons.
 // Or, over the USB cable: open usb_control.html in Chrome and click Connect.
 //
 // Wiring (Pico 2 W -> L9110S):
@@ -15,7 +15,7 @@
 // 【メモ】
 // ・このプログラムで、2つのDCモーター（左右の車輪）をMacから操作できます。
 // ・Wi-Fiで操作：Macで「CanSat-Rover」（パスワード cansat123）に接続し、
-//   ブラウザで http://192.168.42.1 を開く（https ではなく http）。
+//   ブラウザで http://192.168.4.1 を開く（https ではなく http）。
 // ・USBで操作：Chromeで usb_control.html を開き「Connect USB」を押す。
 //   （Arduino IDE のシリアルモニタは閉じておくこと）
 // ・配線：GP2/GP3 = 左モーター、GP4/GP5 = 右モーター、GND は共通にする。
@@ -74,7 +74,7 @@ void drive(int left, int right) {
   motorsRunning = (left != 0 || right != 0);
 }
 
-// 【操作画面】http://192.168.42.1 を開いたときに表示されるWebページ（HTML）
+// 【操作画面】http://192.168.4.1 を開いたときに表示されるWebページ（HTML）
 const char PAGE[] PROGMEM = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
@@ -219,7 +219,9 @@ void setup() {
   drive(0, 0);
 
   // 【Wi-Fi開始】Pico自身がWi-Fiネットワークを作る（アクセスポイント）
+  // アドレスを 192.168.4.1 に固定する（決めておかないと変わることがある）
   WiFi.mode(WIFI_AP);
+  WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
   WiFi.softAP(AP_SSID, AP_PASS);
 
   server.on("/", handleRoot);
