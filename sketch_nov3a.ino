@@ -1,21 +1,23 @@
 // CanSat rover: drive two DC motors (L9110S) over Wi-Fi from a browser.
 //
-// The Pico 2 W creates its own Wi-Fi network. Join it from the Mac, open
-// http://192.168.4.1 and drive with WASD / arrow keys or the on-screen buttons.
+// The Pico 2 W creates its own Wi-Fi network. Join it from an iPad or Mac, open
+// http://192.168.4.1 and drive with the touch joystick. http://192.168.4.1/keys
+// is the fallback page, with WASD / arrow keys and on-screen buttons.
 // Or, over the USB cable: open usb_control.html in Chrome and click Connect.
 //
 // Wiring (Pico 2 W -> L9110S):
-//   GP2 (pin 4) -> A-IA   left motor
-//   GP3 (pin 5) -> A-IB   left motor
-//   GP4 (pin 6) -> B-IA   right motor
-//   GP5 (pin 7) -> B-IB   right motor
-//   GND (pin 8) -> GND    shared with the motor battery
+//   GP16 (pin 21) -> A-IA   left motor
+//   GP17 (pin 22) -> A-IB   left motor
+//   GP18 (pin 24) -> B-IA   right motor
+//   GP19 (pin 25) -> B-IB   right motor
+//   GND (pin 23) -> GND    shared with the motor battery
 //   L9110S VCC  -> motor battery + (2.5-12 V), NOT the Pico's 3V3
 //
 // 【メモ】
-// ・このプログラムで、2つのDCモーター（左右の車輪）をMacから操作できます。
-// ・Wi-Fiで操作：Macで「CanSat-Rover」（パスワード cansat123）に接続し、
+// ・このプログラムで、2つのDCモーター（左右の車輪）をiPadやMacから操作できます。
+// ・Wi-Fiで操作：iPadやMacで「ALEX」（パスワード cansat123）に接続し、
 //   ブラウザで http://192.168.4.1 を開く（https ではなく http）。
+//   予備の画面（キーボード・ボタン）は http://192.168.4.1/keys。
 // ・USBで操作：Chromeで usb_control.html を開き「Connect USB」を押す。
 //   （Arduino IDE のシリアルモニタは閉じておくこと）
 // ・配線：GP2/GP3 = 左モーター、GP4/GP5 = 右モーター、GND は共通にする。
@@ -24,15 +26,21 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
+// 【操作画面】Webページはヘッダーファイルに入っている（tools/embed_pages.py で作る）
+// joystick.html か keys.html を直したら、tools/embed_pages.py を実行してからコンパイルする。
+// The pages are generated. Change the .html file and run tools/embed_pages.py, not the .h files.
+#include "page_joystick.h"
+#include "page_keys.h"
+
 // 【Wi-Fi設定】ネットワーク名とパスワード（ここを変えれば名前を変更できる）
-const char *AP_SSID = "CanSat-Rover";
+const char *AP_SSID = "ALEX";
 const char *AP_PASS = "cansat123";  // WPA2 needs at least 8 characters
 
 // 【ピン設定】モータードライバ（L9110S）につながるピン番号
-const int LEFT_IA = 2;
-const int LEFT_IB = 3;
-const int RIGHT_IA = 4;
-const int RIGHT_IB = 5;
+const int LEFT_IA = 21;
+const int LEFT_IB = 22;
+const int RIGHT_IA = 24;
+const int RIGHT_IB = 25;
 
 // 【回転方向】前進なのに車輪が逆に回る場合は true にする
 // Flip these if a wheel spins backwards when you press forward.
@@ -42,6 +50,10 @@ const bool RIGHT_INVERT = false;
 // 【安全停止】この時間（ミリ秒）命令が来なければモーターを止める
 // Stop both motors if no command arrives for this long (lost connection).
 const unsigned long COMMAND_TIMEOUT_MS = 500;
+
+// 【速度の上限】ページやUSBから何が送られても、この速さを超えない（最大255）
+// Top speed. drive() enforces it, whatever the page or USB sends.
+const int MAX_SPEED = 200;
 
 WebServer server(80);
 unsigned long lastCommandMs = 0;
@@ -69,105 +81,21 @@ void setMotor(int pinIA, int pinIB, int speed, bool invert) {
 
 // 左右のモーターの速さを同時に設定する
 void drive(int left, int right) {
+  left = constrain(left, -MAX_SPEED, MAX_SPEED);
+  right = constrain(right, -MAX_SPEED, MAX_SPEED);
   setMotor(LEFT_IA, LEFT_IB, left, LEFT_INVERT);
   setMotor(RIGHT_IA, RIGHT_IB, right, RIGHT_INVERT);
   motorsRunning = (left != 0 || right != 0);
 }
 
-// 【操作画面】http://192.168.4.1 を開いたときに表示されるWebページ（HTML）
-const char PAGE[] PROGMEM = R"HTML(<!doctype html>
-<html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>CanSat Rover</title>
-<style>
-  body{font-family:-apple-system,sans-serif;background:#111;color:#eee;text-align:center;margin:0;padding:16px;user-select:none}
-  h1{font-size:20px;margin:8px 0 4px}
-  #status{font-size:14px;color:#8c8;margin-bottom:16px}
-  .pad{display:grid;grid-template-columns:repeat(3,90px);grid-gap:8px;justify-content:center}
-  button{height:90px;font-size:28px;border:0;border-radius:12px;background:#333;color:#eee;touch-action:none}
-  button.on{background:#2a7}
-  #stop{background:#a33}
-  .row{margin:20px 0;font-size:16px}
-  input[type=range]{width:240px;vertical-align:middle}
-  .hint{color:#888;font-size:13px}
-</style></head><body>
-<h1>CanSat Rover</h1>
-<div id="status">connecting...</div>
-<div class="pad">
-  <span></span><button data-k="w">&#9650;</button><span></span>
-  <button data-k="a">&#9664;</button><button id="stop">&#9632;</button><button data-k="d">&#9654;</button>
-  <span></span><button data-k="s">&#9660;</button><span></span>
-</div>
-<div class="row">Speed <input id="speed" type="range" min="60" max="255" value="200"> <span id="sv">200</span></div>
-<div class="hint">Keys: W A S D or arrow keys. Space = stop.</div>
-<script>
-const held = {w:false,a:false,s:false,d:false};
-const keyMap = {w:'w',arrowup:'w',a:'a',arrowleft:'a',s:'s',arrowdown:'s',d:'d',arrowright:'d'};
-const speedEl = document.getElementById('speed'), sv = document.getElementById('sv');
-const statusEl = document.getElementById('status');
-speedEl.oninput = () => sv.textContent = speedEl.value;
-
-function refreshButtons(){
-  document.querySelectorAll('button[data-k]').forEach(b => b.classList.toggle('on', held[b.dataset.k]));
-}
-
-// Turn held keys into left/right wheel speeds (-255..255)
-function wheelSpeeds(){
-  const v = +speedEl.value;
-  const t = (held.w ? 1 : 0) - (held.s ? 1 : 0);   // throttle
-  const r = (held.d ? 1 : 0) - (held.a ? 1 : 0);   // turn (+ = right)
-  let l, rt;
-  if (t === 0) { l = r; rt = -r; }                  // spin in place
-  else {                                            // curve: slow the inner wheel
-    l  = t * (r < 0 ? 0.3 : 1);
-    rt = t * (r > 0 ? 0.3 : 1);
-  }
-  return [Math.round(l * v), Math.round(rt * v)];
-}
-
-let busy = false;
-async function send(){
-  if (busy) return;
-  busy = true;
-  const [l, r] = wheelSpeeds();
-  try {
-    const res = await fetch(`/drive?l=${l}&r=${r}`, {cache:'no-store'});
-    statusEl.textContent = res.ok ? `connected  L ${l}  R ${r}` : 'error';
-    statusEl.style.color = '#8c8';
-  } catch (e) {
-    statusEl.textContent = 'disconnected';
-    statusEl.style.color = '#c66';
-  }
-  busy = false;
-}
-// Keep sending so the rover's auto-stop doesn't trigger while driving
-setInterval(send, 100);
-
-function stopAll(){ for (const k in held) held[k] = false; refreshButtons(); send(); }
-
-document.addEventListener('keydown', e => {
-  if (e.key === ' ') { stopAll(); e.preventDefault(); return; }
-  const k = keyMap[e.key.toLowerCase()];
-  if (k) { held[k] = true; refreshButtons(); e.preventDefault(); }
-});
-document.addEventListener('keyup', e => {
-  const k = keyMap[e.key.toLowerCase()];
-  if (k) { held[k] = false; refreshButtons(); }
-});
-window.addEventListener('blur', stopAll);
-
-document.querySelectorAll('button[data-k]').forEach(b => {
-  const k = b.dataset.k;
-  b.addEventListener('pointerdown', e => { held[k] = true; refreshButtons(); b.setPointerCapture(e.pointerId); });
-  b.addEventListener('pointerup', () => { held[k] = false; refreshButtons(); });
-  b.addEventListener('pointercancel', () => { held[k] = false; refreshButtons(); });
-});
-document.getElementById('stop').addEventListener('pointerdown', stopAll);
-</script></body></html>)HTML";
-
 // 【Webサーバー】ページを返す処理と、/drive?l=左&r=右 の命令を受け取る処理
 void handleRoot() {
-  server.send(200, "text/html", PAGE);
+  server.send(200, "text/html", PAGE_JOYSTICK);
+}
+
+// 予備の画面（キーボード・ボタン）/ The fallback page
+void handleKeys() {
+  server.send(200, "text/html", PAGE_KEYS);
 }
 
 void handleDrive() {
@@ -225,6 +153,7 @@ void setup() {
   WiFi.softAP(AP_SSID, AP_PASS);
 
   server.on("/", handleRoot);
+  server.on("/keys", handleKeys);
   server.on("/drive", handleDrive);
   server.onNotFound([]() { server.send(404, "text/plain", "not found"); });
   server.begin();

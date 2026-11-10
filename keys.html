@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>CanSat Rover</title>
+<style>
+  body{font-family:-apple-system,sans-serif;background:#111;color:#eee;text-align:center;margin:0;padding:16px;user-select:none}
+  h1{font-size:20px;margin:8px 0 4px}
+  #status{font-size:14px;color:#8c8;margin-bottom:16px}
+  .pad{display:grid;grid-template-columns:repeat(3,90px);grid-gap:8px;justify-content:center}
+  button{height:90px;font-size:28px;border:0;border-radius:12px;background:#333;color:#eee;touch-action:none}
+  button.on{background:#2a7}
+  #stop{background:#a33}
+  .row{margin:20px 0;font-size:16px}
+  input[type=range]{width:240px;vertical-align:middle}
+  .hint{color:#888;font-size:13px}
+</style></head><body>
+<h1>CanSat Rover</h1>
+<div id="status">connecting...</div>
+<div class="pad">
+  <span></span><button data-k="w">&#9650;</button><span></span>
+  <button data-k="a">&#9664;</button><button id="stop">&#9632;</button><button data-k="d">&#9654;</button>
+  <span></span><button data-k="s">&#9660;</button><span></span>
+</div>
+<div class="row">Speed <input id="speed" type="range" min="60" max="255" value="200"> <span id="sv">200</span></div>
+<div class="hint">Keys: W A S D or arrow keys. Space = stop.</div>
+<script>
+const held = {w:false,a:false,s:false,d:false};
+const keyMap = {w:'w',arrowup:'w',a:'a',arrowleft:'a',s:'s',arrowdown:'s',d:'d',arrowright:'d'};
+const speedEl = document.getElementById('speed'), sv = document.getElementById('sv');
+const statusEl = document.getElementById('status');
+speedEl.oninput = () => sv.textContent = speedEl.value;
+
+function refreshButtons(){
+  document.querySelectorAll('button[data-k]').forEach(b => b.classList.toggle('on', held[b.dataset.k]));
+}
+
+// Turn held keys into left/right wheel speeds (-255..255)
+function wheelSpeeds(){
+  const v = +speedEl.value;
+  const t = (held.w ? 1 : 0) - (held.s ? 1 : 0);   // throttle
+  const r = (held.d ? 1 : 0) - (held.a ? 1 : 0);   // turn (+ = right)
+  let l, rt;
+  if (t === 0) { l = r; rt = -r; }                  // spin in place
+  else {                                            // curve: slow the inner wheel
+    l  = t * (r < 0 ? 0.3 : 1);
+    rt = t * (r > 0 ? 0.3 : 1);
+  }
+  return [Math.round(l * v), Math.round(rt * v)];
+}
+
+let busy = false;
+async function send(){
+  if (busy) return;
+  busy = true;
+  const [l, r] = wheelSpeeds();
+  try {
+    const res = await fetch(`/drive?l=${l}&r=${r}`, {cache:'no-store'});
+    statusEl.textContent = res.ok ? `connected  L ${l}  R ${r}` : 'error';
+    statusEl.style.color = '#8c8';
+  } catch (e) {
+    statusEl.textContent = 'disconnected';
+    statusEl.style.color = '#c66';
+  }
+  busy = false;
+}
+// Keep sending so the rover's auto-stop doesn't trigger while driving
+setInterval(send, 100);
+
+function stopAll(){ for (const k in held) held[k] = false; refreshButtons(); send(); }
+
+document.addEventListener('keydown', e => {
+  if (e.key === ' ') { stopAll(); e.preventDefault(); return; }
+  const k = keyMap[e.key.toLowerCase()];
+  if (k) { held[k] = true; refreshButtons(); e.preventDefault(); }
+});
+document.addEventListener('keyup', e => {
+  const k = keyMap[e.key.toLowerCase()];
+  if (k) { held[k] = false; refreshButtons(); }
+});
+window.addEventListener('blur', stopAll);
+
+document.querySelectorAll('button[data-k]').forEach(b => {
+  const k = b.dataset.k;
+  b.addEventListener('pointerdown', e => { held[k] = true; refreshButtons(); b.setPointerCapture(e.pointerId); });
+  b.addEventListener('pointerup', () => { held[k] = false; refreshButtons(); });
+  b.addEventListener('pointercancel', () => { held[k] = false; refreshButtons(); });
+});
+document.getElementById('stop').addEventListener('pointerdown', stopAll);
+</script></body></html>
