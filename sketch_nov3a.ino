@@ -6,7 +6,7 @@
 // Or, over the USB cable: open usb_control.html in Chrome and click Connect.
 //
 // Wiring (Pico 2 W -> L9110S):
-//   GP16 (pin 21) -> A-IA   left motor
+//   GP15 (pin 20) -> A-IA   left motor
 //   GP17 (pin 22) -> A-IB   left motor
 //   GP18 (pin 24) -> B-IA   right motor
 //   GP19 (pin 25) -> B-IB   right motor
@@ -20,7 +20,7 @@
 //   予備の画面（キーボード・ボタン）は http://192.168.4.1/keys。
 // ・USBで操作：Chromeで usb_control.html を開き「Connect USB」を押す。
 //   （Arduino IDE のシリアルモニタは閉じておくこと）
-// ・配線：GP2/GP3 = 左モーター、GP4/GP5 = 右モーター、GND は共通にする。
+// ・配線：GP15/GP17 = 左モーター、GP18/GP19 = 右モーター、GND は共通にする。
 //   L9110S の VCC はモーター用バッテリーにつなぐ（Pico の 3V3 には絶対つながない）。
 
 #include <WiFi.h>
@@ -37,10 +37,14 @@ const char *AP_SSID = "ALEX";
 const char *AP_PASS = "cansat123";  // WPA2 needs at least 8 characters
 
 // 【ピン設定】モータードライバ（L9110S）につながるピン番号
-const int LEFT_IA = 21;
-const int LEFT_IB = 22;
-const int RIGHT_IA = 24;
-const int RIGHT_IB = 25;
+// ここに書くのは GP の番号（GP16 なら 16）。基板の端の番号（21番ピンなど）ではない。
+// GP23〜GP25 と GP29 は Wi-Fi チップが使うので、絶対に使わない。
+// These are GPIO numbers (GP16 -> 16), not physical pin numbers.
+// Never use GP23-GP25 or GP29: the Wi-Fi chip needs them.
+const int LEFT_IA = 15;   // GP15 (pin 20) — GP16 から移動(GP16 が無反応だったため)
+const int LEFT_IB = 17;   // GP17 (pin 22)
+const int RIGHT_IA = 18;  // GP18 (pin 24)
+const int RIGHT_IB = 19;  // GP19 (pin 25)
 
 // 【回転方向】前進なのに車輪が逆に回る場合は true にする
 // Flip these if a wheel spins backwards when you press forward.
